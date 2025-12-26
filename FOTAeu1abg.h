@@ -40,6 +40,7 @@ public:
     static void restartDevice();
     static void printDeviceInfo();
     static uint32_t getFreeHeap();
+    static uint32_t getFreePsram(); // Новый метод для PSRAM
     static bool hasEnoughMemory(size_t requiredSize);
     
 private:
@@ -82,7 +83,8 @@ private:
     static const unsigned long DEFAULT_CHECK_INTERVAL = 300000; // 5 минут
     static const int DEFAULT_LED_PIN = 2;
     static const size_t MIN_FREE_HEAP = 10240; // 10KB минимально свободной памяти
-    static const size_t BUFFER_SIZE = 4096; // Размер буфера для загрузки
+    // Убрана константа BUFFER_SIZE из заголовочного файла
+    // Она теперь определена только в .cpp файле
 };
 
 #endif
