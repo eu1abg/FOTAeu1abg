@@ -5,6 +5,9 @@
 #include <ArduinoJson.h>
 #include <Update.h>
 
+// Уменьшаем размер буфера для экономии памяти
+static const size_t BUFFER_SIZE = 1024; // Было 4096
+
 // Конструкторы
 FOTAeu1abg::FOTAeu1abg(const char* firmwareType, int firmwareVersion)
     : _ssid(nullptr), _password(nullptr),
@@ -38,6 +41,9 @@ void FOTAeu1abg::begin() {
         Serial.print("Check interval: ");
         Serial.print(_checkInterval / 1000);
         Serial.println(" seconds");
+        Serial.print("Buffer size: ");
+        Serial.print(BUFFER_SIZE);
+        Serial.println(" bytes");
         Serial.println("==========================\n");
     }
     
@@ -241,6 +247,13 @@ void FOTAeu1abg::printDeviceInfo() {
     Serial.print("Free heap: ");
     Serial.print(ESP.getFreeHeap());
     Serial.println(" bytes");
+    
+    #ifdef BOARD_HAS_PSRAM
+    Serial.print("Free PSRAM: ");
+    Serial.print(ESP.getFreePsram());
+    Serial.println(" bytes");
+    #endif
+    
     Serial.print("Flash size: ");
     Serial.print(ESP.getFlashChipSize() / (1024 * 1024));
     Serial.println(" MB");
@@ -259,6 +272,14 @@ void FOTAeu1abg::printDeviceInfo() {
 
 uint32_t FOTAeu1abg::getFreeHeap() {
     return ESP.getFreeHeap();
+}
+
+uint32_t FOTAeu1abg::getFreePsram() {
+    #ifdef BOARD_HAS_PSRAM
+        return ESP.getFreePsram();
+    #else
+        return 0;
+    #endif
 }
 
 bool FOTAeu1abg::hasEnoughMemory(size_t requiredSize) {
@@ -420,11 +441,29 @@ void FOTAeu1abg::startOTA() {
     
     // Индикация начала обновления
     if (_ledPin >= 0) {
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 3; i++) {
             digitalWrite(_ledPin, HIGH);
             delay(200);
             digitalWrite(_ledPin, LOW);
             delay(200);
+        }
+    }
+    
+    // Проверка памяти перед началом
+    uint32_t freeHeap = ESP.getFreeHeap();
+    if (_debugEnabled) {
+        Serial.print("[FOTA] Free heap before OTA: ");
+        Serial.print(freeHeap);
+        Serial.println(" bytes");
+        
+        #ifdef BOARD_HAS_PSRAM
+        Serial.print("[FOTA] Free PSRAM: ");
+        Serial.print(ESP.getFreePsram());
+        Serial.println(" bytes");
+        #endif
+        
+        if (freeHeap < 50000) {
+            Serial.println("[FOTA] WARNING: Low heap memory!");
         }
     }
     
@@ -433,7 +472,7 @@ void FOTAeu1abg::startOTA() {
     
     HTTPClient http;
     http.begin(client, _firmwareURL.c_str());
-    http.setTimeout(60000); // 60 секунд таймаут
+    http.setTimeout(120000); // Увеличиваем таймаут до 120 секунд
     
     if (_debugEnabled) {
         Serial.print("[FOTA] Downloading firmware from: ");
@@ -464,6 +503,20 @@ void FOTAeu1abg::startOTA() {
         Serial.print("[FOTA] Firmware size: ");
         Serial.print(contentLength);
         Serial.println(" bytes");
+        
+        // Проверяем хватит ли места
+        Serial.print("[FOTA] Flash free space: ");
+        uint32_t freeSpace = ESP.getFreeSketchSpace();
+        Serial.print(freeSpace);
+        Serial.println(" bytes");
+        
+        if (contentLength > freeSpace) {
+            Serial.println("[FOTA] ERROR: Not enough flash space!");
+            _lastError = "Not enough flash space";
+            _isUpdating = false;
+            http.end();
+            return;
+        }
     }
     
     if (contentLength <= 0) {
@@ -479,8 +532,8 @@ void FOTAeu1abg::startOTA() {
         return;
     }
     
-    // Проверяем достаточно ли места
-    if (!Update.begin(contentLength)) {
+    // Проверяем достаточно ли места с запасом 10%
+    if (!Update.begin(contentLength + (contentLength / 10))) {
         int error = Update.getError();
         _lastError = String("Update.begin failed: ") + error;
         
@@ -504,61 +557,117 @@ void FOTAeu1abg::startOTA() {
     Update.onProgress([this](size_t progress, size_t total) {
         int percent = (progress * 100) / total;
         
-        // Вызываем callback прогресса
-        if (_progressCallback) {
-            _progressCallback(percent);
-        }
-        
-        // Дебаг вывод каждые 10%
-        if (_debugEnabled && percent % 10 == 0) {
-            static int lastPercent = -1;
-            if (percent != lastPercent) {
-                lastPercent = percent;
-                Serial.print("[FOTA] Progress: ");
-                Serial.print(percent);
-                Serial.println("%");
+        // Вызываем callback прогресса (только каждые 5%)
+        static int lastCallbackPercent = -1;
+        if (percent != lastCallbackPercent && percent % 5 == 0) {
+            lastCallbackPercent = percent;
+            
+            if (_progressCallback) {
+                _progressCallback(percent);
+            }
+            
+            // Дебаг вывод
+            if (_debugEnabled) {
+                static int lastDebugPercent = -1;
+                if (percent != lastDebugPercent && percent % 10 == 0) {
+                    lastDebugPercent = percent;
+                    Serial.print("[FOTA] Progress: ");
+                    Serial.print(percent);
+                    Serial.print("% (Heap: ");
+                    Serial.print(ESP.getFreeHeap());
+                    Serial.println(" bytes)");
+                }
             }
         }
         
         // Индикация LED во время обновления
-        if (_ledPin >= 0 && percent % 20 == 0) {
+        if (_ledPin >= 0 && percent % 25 == 0) {
             digitalWrite(_ledPin, !digitalRead(_ledPin));
         }
     });
     
-    // Скачиваем и записываем прошивку с буферизацией для длинных файлов
+    // Скачиваем и записываем прошивку с небольшим буфером
     WiFiClient* stream = http.getStreamPtr();
-    size_t written = 0;
+    size_t totalWritten = 0;
     uint8_t buffer[BUFFER_SIZE];
     
-    while (http.connected() && written < contentLength) {
+    unsigned long lastProgressTime = millis();
+    unsigned long startTime = millis();
+    
+    while (http.connected() && totalWritten < contentLength) {
         size_t available = stream->available();
-        if (available) {
+        if (available > 0) {
             size_t toRead = min(available, sizeof(buffer));
-            size_t read = stream->readBytes(buffer, toRead);
+            size_t bytesRead = stream->readBytes(buffer, toRead);
             
-            if (Update.write(buffer, read) != read) {
+            size_t written = Update.write(buffer, bytesRead);
+            if (written != bytesRead) {
                 _lastError = "Write error during OTA";
-                if (_debugEnabled) Serial.println("[FOTA] Write error!");
+                if (_debugEnabled) {
+                    Serial.println("[FOTA] Write error!");
+                    Serial.print("Tried to write: ");
+                    Serial.print(bytesRead);
+                    Serial.print(", Actually written: ");
+                    Serial.println(written);
+                }
                 break;
             }
             
-            written += read;
+            totalWritten += written;
+            
+            // Периодически показываем прогресс и проверяем память
+            if (millis() - lastProgressTime > 1000) {
+                lastProgressTime = millis();
+                int percent = (totalWritten * 100) / contentLength;
+                
+                if (_debugEnabled && percent % 5 == 0) {
+                    Serial.print("[FOTA] Written: ");
+                    Serial.print(totalWritten);
+                    Serial.print("/");
+                    Serial.print(contentLength);
+                    Serial.print(" bytes (");
+                    Serial.print(percent);
+                    Serial.print("%), Heap: ");
+                    Serial.print(ESP.getFreeHeap());
+                    Serial.println(" bytes");
+                }
+            }
         }
+        
+        // Небольшая задержка для освобождения процессора
         delay(1);
+        
+        // Проверка таймаута (5 минут)
+        if (millis() - startTime > 300000) {
+            _lastError = "OTA timeout";
+            if (_debugEnabled) Serial.println("[FOTA] OTA timeout!");
+            break;
+        }
     }
     
     if (_debugEnabled) {
-        Serial.print("[FOTA] Downloaded: ");
-        Serial.print(written);
+        Serial.print("[FOTA] Total downloaded: ");
+        Serial.print(totalWritten);
         Serial.print(" of ");
         Serial.print(contentLength);
         Serial.println(" bytes");
+        
+        Serial.print("[FOTA] Time elapsed: ");
+        Serial.print((millis() - startTime) / 1000);
+        Serial.println(" seconds");
     }
     
-    if (written != contentLength) {
+    http.end();
+    
+    if (totalWritten != contentLength) {
         _lastError = "Download incomplete";
-        if (_debugEnabled) Serial.println("[FOTA] Download incomplete!");
+        if (_debugEnabled) {
+            Serial.println("[FOTA] Download incomplete!");
+            Serial.print("Missing: ");
+            Serial.print(contentLength - totalWritten);
+            Serial.println(" bytes");
+        }
+        
         Update.end();
         
         if (_updateErrorCallback) {
@@ -566,7 +675,6 @@ void FOTAeu1abg::startOTA() {
         }
         
         _isUpdating = false;
-        http.end();
         return;
     }
     
@@ -585,19 +693,20 @@ void FOTAeu1abg::startOTA() {
             
             // Финальная индикация
             if (_ledPin >= 0) {
-                for (int i = 0; i < 10; i++) {
+                for (int i = 0; i < 5; i++) {
                     digitalWrite(_ledPin, HIGH);
                     delay(100);
                     digitalWrite(_ledPin, LOW);
                     delay(100);
                 }
+                digitalWrite(_ledPin, HIGH); // Оставить включенным перед перезагрузкой
             }
             
             if (_updateCompleteCallback) {
                 _updateCompleteCallback();
             }
             
-            delay(2000);
+            delay(1000);
             ESP.restart();
         } else {
             _lastError = "Update not finished";
@@ -621,7 +730,6 @@ void FOTAeu1abg::startOTA() {
         }
     }
     
-    http.end();
     _isUpdating = false;
 }
 
@@ -632,7 +740,7 @@ void FOTAeu1abg::updateLED() {
     
     if (_isUpdating) {
         // Быстрое мигание во время обновления
-        if (currentTime - _lastLEDToggle > 500) {
+        if (currentTime - _lastLEDToggle > 300) {
             _lastLEDToggle = currentTime;
             _ledState = !_ledState;
             digitalWrite(_ledPin, _ledState);
