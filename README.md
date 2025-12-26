@@ -111,7 +111,7 @@ hasEnoughMemory(size) - проверка памяти
 
 ```
 ## Структура полной библиотеки:
-text
+```text
 FOTAeu1abg/
 ├── src/
 │   ├── FOTAeu1abg.h
@@ -132,4 +132,5 @@ FOTAeu1abg/
 ├── LICENSE                    # MIT License
 └── README.md                  # Документация
 ```
+
 
