@@ -48,7 +48,7 @@ FOTAeu1abg fota("firmware-type", 1, "SSID", "password");
 ```
 
 ### Основные методы
-
+```cpp
 begin() - инициализация библиотеки
 
 handle() - фоновая обработка (вызывать в loop())
@@ -56,10 +56,12 @@ handle() - фоновая обработка (вызывать в loop())
 checkForUpdates(bool force) - проверка обновлений
 
 performUpdate() - выполнение обновления
+```
 
 ### Callback функции
 
-``` setOnProgressCallback(func) - прогресс обновления
+```cpp
+ setOnProgressCallback(func) - прогресс обновления
 
 setOnUpdateAvailableCallback(func) - найдено обновление
 
@@ -72,7 +74,8 @@ setOnUpdateErrorCallback(func) - ошибка обновления
 
 ### Информация
 
-```` getCurrentVersion() - текущая версия
+```cpp
+ getCurrentVersion() - текущая версия
 
 getAvailableVersion() - доступная версия
 
@@ -81,11 +84,12 @@ isUpdateAvailable() - есть ли обновление
 isUpdating() - идет ли обновление
 
 getLastError() - последняя ошибка
+
 ```
 
 ### Утилиты
 
-```
+```cpp
 restartDevice() - перезагрузка устройства
 
 printDeviceInfo() - информация об устройстве
@@ -93,6 +97,7 @@ printDeviceInfo() - информация об устройстве
 getFreeHeap() - свободная память
 
 hasEnoughMemory(size) - проверка памяти
+
 ```
 
 ## Формат JSON манифеста
@@ -103,5 +108,7 @@ hasEnoughMemory(size) - проверка памяти
   "version": 2,
   "url": "https://example.com/firmware.bin"
 }
+
 ```
+
 
