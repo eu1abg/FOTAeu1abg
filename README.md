@@ -160,4 +160,64 @@ void onUpdateAvailable(int currentVer, int newVer) {
   fota.performUpdate();
 }
 ```
+# Пример: Блокирующая проверка + немедленное обновление
+
+```cpp
+#include <FOTAeu1abg.h>
+
+const char* ssid = "EPSminsk.by";
+const char* password = "13051973";
+FOTAeu1abg fota("esp32-fota-http", 1, ssid, password);
+
+void setup() {
+  Serial.begin(115200);
+  delay(2000);
+  
+  Serial.println("=== Auto Update Example ===");
+  
+  fota.setManifestURL("https://raw.githubusercontent.com/eu1abg/Webasto_virtuino/main/firmware/firmware.json");
+  fota.setDebugEnabled(true);
+  
+  // БЛОКИРУЮЩАЯ проверка и обновление
+  checkAndUpdateBlocking();
+  
+  // Если мы здесь, значит обновления нет или произошла ошибка
+  Serial.println("Starting main application...");
+}
+
+void loop() {
+  // Ваш основной код
+  delay(1000);
+}
+
+void checkAndUpdateBlocking() {
+  Serial.println("Blocking update check...");
+  
+  // 1. Проверяем обновление (блокирующий вызов)
+  bool updateAvailable = fota.checkForUpdates(true);
+  
+  if (updateAvailable) {
+    // 2. Получаем информацию о версиях
+    int currentVer = fota.getCurrentVersion();
+    int availableVer = fota.getAvailableVersion();
+    
+    Serial.print("\n=== UPDATE FOUND ===");
+    Serial.print("\nCurrent: v");
+    Serial.print(currentVer);
+    Serial.print("\nAvailable: v");
+    Serial.print(availableVer);
+    Serial.println("\n===================\n");
+    
+    // 3. Немедленно начинаем обновление (блокирующий вызов)
+    Serial.println("Starting update immediately...");
+    fota.performUpdate();
+    
+    // Если performUpdate() завершился, значит что-то пошло не так
+    Serial.println("ERROR: Update failed or returned!");
+  } else {
+    Serial.println("No update available.");
+  }
+}
+```
+
 
