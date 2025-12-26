@@ -110,5 +110,26 @@ hasEnoughMemory(size) - проверка памяти
 }
 
 ```
-
+## Структура полной библиотеки:
+text
+FOTAeu1abg/
+├── src/
+│   ├── FOTAeu1abg.h
+│   └── FOTAeu1abg.cpp
+├── examples/
+│   ├── BasicOTA/
+│   │   └── BasicOTA.ino
+│   ├── AdvancedOTA/
+│   │   └── AdvancedOTA.ino
+│   └── MinimalOTA/
+│       └── MinimalOTA.ino
+├── test/
+│   └── test_fota.ino
+├── library.properties          # Для Arduino IDE
+├── library.json               # Для PlatformIO
+├── keywords.txt               # Для Arduino IDE
+├── .piolibdeps/               # Автоматически создается PlatformIO
+├── LICENSE                    # MIT License
+└── README.md                  # Документация
+```
 
