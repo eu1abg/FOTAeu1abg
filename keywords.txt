@@ -1,0 +1,42 @@
+#######################################
+# Syntax Coloring Map For FOTAeu1abg
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+FOTAeu1abg	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+begin	KEYWORD2
+handle	KEYWORD2
+checkForUpdates	KEYWORD2
+performUpdate	KEYWORD2
+setManifestURL	KEYWORD2
+setCheckInterval	KEYWORD2
+setLEDPin	KEYWORD2
+setDebugEnabled	KEYWORD2
+setOnProgressCallback	KEYWORD2
+setOnUpdateAvailableCallback	KEYWORD2
+setOnUpdateStartCallback	KEYWORD2
+setOnUpdateCompleteCallback	KEYWORD2
+setOnUpdateErrorCallback	KEYWORD2
+getCurrentVersion	KEYWORD2
+getAvailableVersion	KEYWORD2
+isUpdateAvailable	KEYWORD2
+isUpdating	KEYWORD2
+getLastError	KEYWORD2
+restartDevice	KEYWORD2
+printDeviceInfo	KEYWORD2
+getFreeHeap	KEYWORD2
+hasEnoughMemory	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+DEFAULT_CHECK_INTERVAL	LITERAL1
+DEFAULT_LED_PIN	LITERAL1
+MIN_FREE_HEAP	LITERAL1
+BUFFER_SIZE	LITERAL1
